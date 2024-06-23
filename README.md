@@ -1,34 +1,21 @@
 # Militant Hitchhiker's Switchblade Pack
 
-Militant Hitchhiker's Switchblade Pack is a collection of custom nodes for ComfyUI that provide various multi-function capabilities. It currently includes the following nodes:
+The Militant Hitchhiker's Switchblade Pack is a collection of custom nodes for ComfyUI that provide advanced text manipulation and prompt generation functionality. It includes the following nodes:
 
-1. Integrated Random Prompt Generator
-2. Text Appender
-   
+1. Text Appender
+2. Integrated Random Prompt Generator
+
 ## Installation
 
-1. Download the Militant Hitchhiker's Switchblade Pack from the [GitHub repository](https://github.com/your-username/switchblade-pack).
-2. Extract the contents of the downloaded archive.
-3. Copy the extracted folder to the `custom_nodes` directory of your ComfyUI installation.
+1. Open a terminal or command prompt.
+2. Navigate to the `custom_nodes` directory of your ComfyUI installation.
+3. Run the following command to clone the repository:
+   ```
+   git clone https://github.com/MilitantHitchhiker/MilitantHitchhiker-SwitchbladePack.git
+   ```
 4. Restart ComfyUI to load the new nodes.
 
 ## Node Details
-
-### Integrated Random Prompt Generator
-
-The Integrated Random Prompt Generator node generates random prompts by selecting items from up to four dictionary files and joining them with a specified delimiter.
-
-#### Inputs
-
-- `dict1_file`, `dict2_file`, `dict3_file`, `dict4_file` (required): The names of the dictionary files to use. The files should be placed in the `input/Dictionaries` folder of your ComfyUI installation. Use `none` to disable a dictionary.
-- `enable_dict1`, `enable_dict2`, `enable_dict3`, `enable_dict4` (required): Boolean values indicating whether to enable each dictionary. Default is `True` for all dictionaries.
-- `dict1_delimiter`, `dict2_delimiter`, `dict3_delimiter`, `dict4_delimiter` (required): The delimiters used to split the items in each dictionary file. Default is `\n` (newline) for all dictionaries.
-- `output_delimiter` (required): The delimiter used to join the selected items from each dictionary. Default is a space.
-- `seed` (required): The random seed for reproducibility. Default is `0`.
-
-#### Outputs
-
-- `result`: The generated prompt, with items randomly selected from the enabled dictionaries and joined by the `output_delimiter`.
 
 ### Text Appender
 
@@ -48,15 +35,23 @@ The Text Appender node allows you to concatenate up to five text inputs with a s
 
 - `result`: The concatenated text, with the specified delimiter joining the non-empty text inputs.
 
-## Usage
+### Integrated Random Prompt Generator
 
-1. Open ComfyUI and create a new graph.
-2. Drag and drop the desired nodes from the Militant Hitchhiker's Switchblade Pack into the graph.
-3. Connect the nodes to other nodes or inputs as needed.
-4. Configure the node inputs according to your requirements.
-5. Run the graph to generate the desired output.
+The Integrated Random Prompt Generator node generates random prompts by selecting items from up to four dictionary files and joining them with a specified delimiter.
 
-## Examples
+#### Inputs
+
+- `dict1_file`, `dict2_file`, `dict3_file`, `dict4_file` (required): The names of the dictionary files to use. The files should be placed in the `input/Dictionaries` folder of your ComfyUI installation. Use `none` to disable a dictionary.
+- `enable_dict1`, `enable_dict2`, `enable_dict3`, `enable_dict4` (required): Boolean values indicating whether to enable each dictionary. Default is `True` for all dictionaries.
+- `dict1_delimiter`, `dict2_delimiter`, `dict3_delimiter`, `dict4_delimiter` (required): The delimiters used to split the items in each dictionary file. Default is `\n` (newline) for all dictionaries.
+- `output_delimiter` (required): The delimiter used to join the selected items from each dictionary. Default is a space.
+- `seed` (required): The random seed for reproducibility. Default is `0`.
+
+#### Outputs
+
+- `result`: The generated prompt, with items randomly selected from the enabled dictionaries and joined by the `output_delimiter`.
+
+## Usage Examples
 
 ### Text Appender
 
@@ -77,7 +72,7 @@ The Text Appender node allows you to concatenate up to five text inputs with a s
 
 ## Contributing
 
-Contributions to the Militant Hitchhiker's Switchblade Pack are welcome! If you have any ideas, bug reports, or feature requests, please open an issue on the [GitHub repository](https://github.com/your-username/switchblade-pack). Pull requests are also encouraged.
+Contributions to the Militant Hitchhiker's Switchblade Pack are welcome! If you have any ideas, bug reports, or feature requests, please open an issue on the [GitHub repository](https://github.com/MilitantHitchhiker/MilitantHitchhiker-SwitchbladePack). Pull requests are also encouraged.
 
 ## License
 
