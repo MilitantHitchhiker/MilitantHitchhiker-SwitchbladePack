@@ -58,7 +58,7 @@ The Integrated Random Prompt Generator node generates random prompts by selectin
 1. Connect the Text Appender node to a text input node.
 2. Set the `delimiter` to `\\n` to join the text inputs with newline characters.
 3. Specify the `output_file` to append the result to a file.
-4. Run the graph to concatenate the text inputs and save the result to the specified file.
+4. Run the workflow to concatenate the text inputs and save the result to the specified file.
 
 ### Integrated Random Prompt Generator
 
@@ -68,7 +68,7 @@ The Integrated Random Prompt Generator node generates random prompts by selectin
 4. Specify the delimiters for each dictionary file using the `dict_delimiter` inputs.
 5. Set the `output_delimiter` to control how the selected items are joined.
 6. Specify a `seed` value for reproducibility, or leave it as `0` for random results.
-7. Run the graph to generate random prompts based on the selected dictionaries.
+7. Run the workflow to generate random prompts based on the selected dictionaries.
 
 ## Contributing
 
