@@ -1,6 +1,6 @@
 # Militant Hitchhiker's Switchblade Pack
 
-The Militant Hitchhiker's Switchblade Pack is a collection of custom nodes for ComfyUI that provide advanced text manipulation and prompt generation functionality. It includes the following nodes:
+Militant Hitchhiker's Switchblade Pack is a collection of custom nodes for ComfyUI that provide various multi-function capabilities. It currently includes the following nodes:
 
 1. Text Appender
 2. Integrated Random Prompt Generator
