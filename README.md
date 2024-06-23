@@ -28,7 +28,7 @@ The Text Appender node allows you to concatenate up to five text inputs with a s
 - `text3` (optional): The third text input. Default is `None`.
 - `text4` (optional): The fourth text input. Default is `None`.
 - `text5` (optional): The fifth text input. Default is `None`.
-- `delimiter` (optional): The delimiter to use for joining the text inputs. Default is `\n` (newline). Use `\\n` in the input field to represent a newline character.
+- `delimiter` (optional): The delimiter to use for joining the text inputs. Default is `\n` (newline). Use `\n` in the input field to represent a newline character.
 - `output_file` (optional): The name of the file to append the result to. The file will be created in the `dictionaries` folder. Default is an empty string (no file output).
 
 #### Outputs
@@ -56,7 +56,7 @@ The Integrated Random Prompt Generator node generates random prompts by selectin
 ### Text Appender
 
 1. Connect the Text Appender node to a text input node.
-2. Set the `delimiter` to `\\n` to join the text inputs with newline characters.
+2. Set the `delimiter` to `\n` to join the text inputs with newline characters.
 3. Specify the `output_file` to append the result to a file.
 4. Run the workflow to concatenate the text inputs and save the result to the specified file.
 
