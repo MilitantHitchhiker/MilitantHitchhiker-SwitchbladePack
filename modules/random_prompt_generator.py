@@ -7,10 +7,8 @@ class IntegratedRandomPromptGenerator:
     def INPUT_TYPES(cls):
         # Get the path of the current script
         script_path = os.path.abspath(__file__)
-
         # Navigate up the directory tree to reach the "ComfyUI" folder
         comfyui_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(script_path))))
-
         # Construct the path to the "Dictionaries" folder
         dictionaries_folder = os.path.join(comfyui_path, "input", "Dictionaries")
         files = cls.get_all_txt_files(dictionaries_folder)
@@ -48,14 +46,14 @@ class IntegratedRandomPromptGenerator:
     FUNCTION = "generate"
     CATEGORY = "text"
 
-    def generate(self, dict1_file, dict2_file, dict3_file, dict4_file, 
-                 enable_dict1, enable_dict2, enable_dict3, enable_dict4, 
+    def generate(self, dict1_file, dict2_file, dict3_file, dict4_file,
+                 enable_dict1, enable_dict2, enable_dict3, enable_dict4,
                  dict1_delimiter, dict2_delimiter, dict3_delimiter, dict4_delimiter,
                  output_delimiter, seed):
         random.seed(seed)
-        
-        dictionaries_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dictionaries")
-        
+       
+        dictionaries_folder = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "input", "Dictionaries")
+       
         def load_and_process_dict(file, delimiter, enabled):
             if not enabled or file == "none":
                 return []
