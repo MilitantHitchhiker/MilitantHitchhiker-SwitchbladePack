@@ -55,7 +55,7 @@ class TextAppender:
         result = delimiter.join(texts)
 
         if output_file:
-            dictionaries_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dictionaries")
+            dictionaries_folder = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "input", "Dictionaries")
             file_path = os.path.join(dictionaries_folder, output_file)
 
             try:
