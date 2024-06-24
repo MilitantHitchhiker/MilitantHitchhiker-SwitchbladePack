@@ -9,6 +9,6 @@ Repository = "https://github.com/MilitantHitchhiker/MilitantHitchhiker-Switchbla
 #  Used by Comfy Registry https://comfyregistry.org
 
 [tool.comfy]
-PublisherId = ""
+PublisherId = "militanthitchhiker"
 DisplayName = "MilitantHitchhiker-SwitchbladePack"
 Icon = ""
