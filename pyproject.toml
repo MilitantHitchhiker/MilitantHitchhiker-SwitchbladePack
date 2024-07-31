@@ -2,7 +2,7 @@
 name = "militanthitchhiker-switchbladepack"
 description = "Militant Hitchhiker's Switchblade Pack is a collection of custom nodes for ComfyUI that provide various multi-function capabilities."
 version = "1.0.0"
-license = "LICENSE"
+license = { file = "LICENSE" }
 
 [project.urls]
 Repository = "https://github.com/MilitantHitchhiker/MilitantHitchhiker-SwitchbladePack"
