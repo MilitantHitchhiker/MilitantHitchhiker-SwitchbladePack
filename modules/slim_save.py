@@ -1,5 +1,7 @@
 import torch
 from safetensors.torch import save_file
+import os
+import folder_paths
 
 class ModelWeightsSave:
     @classmethod
@@ -27,8 +29,18 @@ class ModelWeightsSave:
         # Filter out non-tensor items from the state dict
         filtered_state_dict = {k: v for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
         
-        save_file(filtered_state_dict, f"{filename_prefix}.safetensors")
-        print(f"Model weights saved to {filename_prefix}.safetensors")
+        # Get the output directory
+        output_dir = folder_paths.get_output_directory()
+        
+        # Create the full path for the output file
+        output_path = os.path.join(output_dir, f"{filename_prefix}.safetensors")
+        
+        # Ensure the output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Save the file
+        save_file(filtered_state_dict, output_path)
+        print(f"Model weights saved to {output_path}")
         return ()
 
 # This line is needed for ComfyUI to recognize and load the custom node
