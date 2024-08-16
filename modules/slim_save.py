@@ -2,14 +2,15 @@ import torch
 from safetensors.torch import save_file
 import os
 import folder_paths
+import json
 
-class ModelWeightsSave:
+class FLUXModelWeightsSave:
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
                 "model": ("MODEL",),
-                "filename_prefix": ("STRING", {"default": "model_weights"})
+                "filename_prefix": ("STRING", {"default": "flux_model_weights"})
             }
         }
     
@@ -19,9 +20,9 @@ class ModelWeightsSave:
     CATEGORY = "advanced/model_saving"
 
     def save_weights(self, model, filename_prefix):
-        if hasattr(model, 'model'):  # Check if it's a ModelPatcher object
+        if hasattr(model, 'model'):
             state_dict = model.model.state_dict()
-        elif hasattr(model, 'state_dict'):  # Check if it's a regular PyTorch model
+        elif hasattr(model, 'state_dict'):
             state_dict = model.state_dict()
         else:
             raise ValueError("Unsupported model type. Cannot extract state_dict.")
@@ -41,14 +42,26 @@ class ModelWeightsSave:
         # Save the file
         save_file(filtered_state_dict, output_path)
         print(f"Model weights saved to {output_path}")
+        
+        # Save model structure information
+        structure_info = {
+            "model_type": "FLUX",
+            "keys": list(filtered_state_dict.keys()),
+            "shapes": {k: v.shape for k, v in filtered_state_dict.items()}
+        }
+        structure_path = os.path.join(output_dir, f"{filename_prefix}_structure.json")
+        with open(structure_path, 'w') as f:
+            json.dump(structure_info, f, indent=2)
+        print(f"Model structure information saved to {structure_path}")
+        
         return ()
 
 # This line is needed for ComfyUI to recognize and load the custom node
 NODE_CLASS_MAPPINGS = {
-    "ModelWeightsSave": ModelWeightsSave
+    "FLUXModelWeightsSave": FLUXModelWeightsSave
 }
 
 # This line is optional, but can be used to specify a user-friendly name for the node
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "ModelWeightsSave": "Save Model Weights"
+    "FLUXModelWeightsSave": "Save FLUX Model Weights"
 }
