@@ -17,8 +17,18 @@ class ModelWeightsSave:
     CATEGORY = "advanced/model_saving"
 
     def save_weights(self, model, filename_prefix):
-        state_dict = model.state_dict()
-        save_file(state_dict, f"{filename_prefix}.safetensors")
+        if hasattr(model, 'model'):  # Check if it's a ModelPatcher object
+            state_dict = model.model.state_dict()
+        elif hasattr(model, 'state_dict'):  # Check if it's a regular PyTorch model
+            state_dict = model.state_dict()
+        else:
+            raise ValueError("Unsupported model type. Cannot extract state_dict.")
+        
+        # Filter out non-tensor items from the state dict
+        filtered_state_dict = {k: v for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
+        
+        save_file(filtered_state_dict, f"{filename_prefix}.safetensors")
+        print(f"Model weights saved to {filename_prefix}.safetensors")
         return ()
 
 # This line is needed for ComfyUI to recognize and load the custom node
