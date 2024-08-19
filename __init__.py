@@ -25,7 +25,6 @@ NODE_MODULES = [
     "random_prompt_generator",
     "text_appender",
     "flux_save",
-    "ClipTextEncoderFLUX",
 ]
 
 def load_nodes(module_name: str):
