@@ -24,7 +24,8 @@ print(f"### Loading: Militant Hitchhiker's Switchblade Pack' (Switchblade v1)")
 NODE_MODULES = [
     "random_prompt_generator",
     "text_appender",
-    "slim_save",
+    "flux_save",
+    "ClipTextEncoderFLUX",
 ]
 
 def load_nodes(module_name: str):

@@ -29,7 +29,7 @@ class TextAppender:
     RETURN_TYPES = ("STRING",)
     FUNCTION = "append_text"
     OUTPUT_NODE = True
-    CATEGORY = "text"
+    CATEGORY = "Switchblade"
 
     @staticmethod
     def get_all_txt_files(directory):

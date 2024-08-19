@@ -44,7 +44,7 @@ class IntegratedRandomPromptGenerator:
 
     RETURN_TYPES = ("STRING",)
     FUNCTION = "generate"
-    CATEGORY = "text"
+    CATEGORY = "Switchblade"
 
     def generate(self, dict1_file, dict2_file, dict3_file, dict4_file,
                  enable_dict1, enable_dict2, enable_dict3, enable_dict4,
