@@ -1,7 +1,7 @@
 [project]
 name = "militanthitchhiker-switchbladepack"
 description = "Militant Hitchhiker's Switchblade Pack is a collection of custom nodes for ComfyUI that provide various multi-function capabilities."
-version = "1.0.0"
+version = "1.0.1"
 license = { file = "LICENSE" }
 
 [project.urls]
