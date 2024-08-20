@@ -4,6 +4,7 @@ Militant Hitchhiker's Switchblade Pack is a collection of custom nodes for Comfy
 
 1. Text Appender
 2. Integrated Random Prompt Generator
+3. Save Flux Model Weights
 
 ## Installation
 
