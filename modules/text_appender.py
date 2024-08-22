@@ -6,9 +6,9 @@ class TextAppender_v2:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "text1": ("STRING", {"default": ""}),
             },
             "optional": {
+                "text1": ("STRING", {"default": ""}),
                 "text2": ("STRING", {"default": ""}),
                 "text3": ("STRING", {"default": ""}),
                 "text4": ("STRING", {"default": ""}),
