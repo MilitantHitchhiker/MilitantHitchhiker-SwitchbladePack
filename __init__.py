@@ -24,7 +24,9 @@ print(f"### Loading: Militant Hitchhiker's Switchblade Pack' (Switchblade v1)")
 NODE_MODULES = [
     "random_prompt_generator",
     "text_appender",
-    "flux_save",
+    "model_save",
+    "militant_merge",
+    "model_analyser",
 ]
 
 def load_nodes(module_name: str):
