@@ -32,9 +32,7 @@ NODE_MODULES = [
     "random_prompt_generator",
     "text_appender",
     "model_save",
-    "militant_merge",
     "model_analyser",
-    "txt_file_append",
 ]
 
 def load_nodes(module_name: str) -> None:
