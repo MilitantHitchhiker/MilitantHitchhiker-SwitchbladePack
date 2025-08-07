@@ -60,23 +60,6 @@ The Model Analyser node provides detailed analysis of a given model's structure,
 #### Outputs
 - `analysis`: A JSON string containing detailed information about the model's structure, size, block information, and data types.
 
-### Militant Merge Node (FLUX)
-
-The Militant Merge Node allows for advanced merging of two models with various options and analysis.
-
-#### Inputs
-- `model1`, `model2` (required): The two models to be merged.
-- `use_smaller_model` (required): Boolean indicating whether to use the smaller model as the base.
-- `merge_mode` (required): The merge mode to use ("simple" or "dare").
-- `input_blocks_merge_amount`, `middle_block_merge_amount`, `output_blocks_merge_amount` (required): Float values (0.0 to 1.0) indicating the merge amount for different parts of the model.
-- `force_keep_dim` (required): Boolean indicating whether to force keeping dimensions when merging.
-- `random_drop_probability` (required): Float value (0.0 to 1.0) for random drop probability in DARE merge mode.
-- `mask_model` (optional): An optional mask model for the merge process.
-
-#### Outputs
-- `merged_model`: The resulting merged model.
-- `analysis_summary`: A JSON string containing a summary of the merge process and results.
-
 ### Save Flux Model
 
 The Save Flux Model node allows saving a model in various formats with additional information.

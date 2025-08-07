@@ -31,8 +31,11 @@ NODE_DISPLAY_NAME_MAPPINGS: Dict[str, str] = {}
 NODE_MODULES = [
     "random_prompt_generator",
     "text_appender",
-    "model_save",
+    #"model_save",
     "model_analyser",
+    "flux_quant",
+    #"arc_lr_scheduler",
+    "groq_node",
 ]
 
 def load_nodes(module_name: str) -> None:

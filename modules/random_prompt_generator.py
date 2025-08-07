@@ -2,7 +2,7 @@ import os
 import sys
 import random
 
-class IntegratedRandomPromptGenerator:
+class DictionaryPromptGenerator:
     @classmethod
     def INPUT_TYPES(cls):
         # Get the path of the current script
@@ -22,11 +22,11 @@ class IntegratedRandomPromptGenerator:
                 "enable_dict2": ("BOOLEAN", {"default": True}),
                 "enable_dict3": ("BOOLEAN", {"default": True}),
                 "enable_dict4": ("BOOLEAN", {"default": True}),
-                "dict1_delimiter": ("STRING", {"default": "\n"}),
-                "dict2_delimiter": ("STRING", {"default": "\n"}),
-                "dict3_delimiter": ("STRING", {"default": "\n"}),
-                "dict4_delimiter": ("STRING", {"default": "\n"}),
-                "output_delimiter": ("STRING", {"default": " "}),
+                "dict1_delimiter": ("STRING", {"default": ";"}),
+                "dict2_delimiter": ("STRING", {"default": ";"}),
+                "dict3_delimiter": ("STRING", {"default": ";"}),
+                "dict4_delimiter": ("STRING", {"default": ";"}),
+                "output_delimiter": ("STRING", {"default": ", "}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
             },
         }
@@ -44,7 +44,7 @@ class IntegratedRandomPromptGenerator:
 
     RETURN_TYPES = ("STRING",)
     FUNCTION = "generate"
-    CATEGORY = "Switchblade"
+    CATEGORY = "MilitantAI/Switchblade/Text Processing"
 
     def generate(self, dict1_file, dict2_file, dict3_file, dict4_file,
                  enable_dict1, enable_dict2, enable_dict3, enable_dict4,
@@ -82,9 +82,9 @@ class IntegratedRandomPromptGenerator:
         return (result,)
 
 NODE_CLASS_MAPPINGS = {
-    "IntegratedRandomPromptGenerator": IntegratedRandomPromptGenerator
+    "IntegratedRandomPromptGenerator": DictionaryPromptGenerator
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "IntegratedRandomPromptGenerator": "Integrated Random Prompt Generator"
+    "IntegratedRandomPromptGenerator": "Prompt Generator (Dictionary)"
 }

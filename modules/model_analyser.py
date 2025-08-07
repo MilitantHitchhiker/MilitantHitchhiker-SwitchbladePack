@@ -13,7 +13,7 @@ class ModelAnalyserNode:
     
     RETURN_TYPES = ("STRING",)
     FUNCTION = "analyse_model"
-    CATEGORY = "Switchblade"
+    CATEGORY = "MilitantAI/Switchblade/Model Merging"
 
     def analyse_model(self, model):
         model_state_dict = model.model.state_dict()

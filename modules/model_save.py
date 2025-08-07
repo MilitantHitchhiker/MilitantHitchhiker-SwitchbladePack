@@ -21,7 +21,7 @@ class ModelSave_v2:
     RETURN_TYPES = ()
     FUNCTION = "save_flux_model"
     OUTPUT_NODE = True
-    CATEGORY = "Switchblade"
+    CATEGORY = "MilitantAI/Switchblade/Model Merging"
 
     def save_flux_model(self, model, filename_prefix, output_format):
         state_dict = model.model.state_dict()
