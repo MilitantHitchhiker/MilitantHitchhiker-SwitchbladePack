@@ -68,7 +68,7 @@ def write_nodes_list(module_names: list[str]) -> None:
 
 def initialize_switchblade() -> None:
     """Initialize the Switchblade Pack."""
-    logger.info("Loading: Militant Hitchhiker's Switchblade Pack (Switchblade v1)")
+    logger.info("Loading: Militant Hitchhiker's Switchblade Pack (Switchblade v1.3)")
     
     for module_name in NODE_MODULES:
         load_nodes(module_name)
