@@ -36,6 +36,9 @@ NODE_MODULES = [
     "flux_quant",
     #"arc_lr_scheduler",
     "groq_node",
+    "god_scheduler",
+    "god_sampler",
+    "god_sampler_ext",
 ]
 
 def load_nodes(module_name: str) -> None:
