@@ -34,11 +34,12 @@ NODE_MODULES = [
     #"model_save",
     "model_analyser",
     "flux_quant",
-    #"arc_lr_scheduler",
+    "ARC_scheduler",
     "groq_node",
     "god_scheduler",
     "god_sampler",
     "god_sampler_ext",
+    "ODE_EMA_sampler",
 ]
 
 def load_nodes(module_name: str) -> None:
@@ -71,7 +72,7 @@ def write_nodes_list(module_names: list[str]) -> None:
 
 def initialize_switchblade() -> None:
     """Initialize the Switchblade Pack."""
-    logger.info("Loading: Militant Hitchhiker's Switchblade Pack (Switchblade v1.3)")
+    logger.info("Loading: Militant Hitchhiker's Switchblade Pack (Switchblade v1.4)")
     
     for module_name in NODE_MODULES:
         load_nodes(module_name)
