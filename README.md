@@ -1,8 +1,8 @@
-# Militant Hitchhiker's Switchblade Pack (v1.3)
+# Militant Hitchhiker's Switchblade Pack (v1.5)
 
 Militant Hitchhiker's Switchblade Pack is a set of multi-function custom nodes for ComfyUI, covering text processing, prompt enhancement, model analysis/quantisation, and advanced scheduling/sampling.
 
-This release reflects Switchblade v1.3 (as initialised in the loader) and includes new nodes for GOD/ARC/ODE EMA, Flux quant, and a Groq-powered prompt enhancer.
+This release reflects Switchblade v1.5 (as initialised in the loader) and includes new nodes for GOD/ARC/ODE EMA, Flux quant, and a Groq-powered prompt enhancer.
 
 ## Installation
 
@@ -129,15 +129,8 @@ Contributions are welcome! Please open an issue or PR on the [GitHub repository]
 
 ## Changelog
 
-v1.3
-- Added: `GOD Scheduler (Advanced)`, `GOD Sampler (Advanced)`, `GOD Sampler (Advanced) Ext.`, `ODE EMA Sampler`.
-- Added: `ARC Scheduler` for deterministic ARC-warped schedules.
-- Added: `Flux Quant Node` for precision conversion + analysis + save.
-- Added: `Groq API Prompt Enhancer` with `modules/groq_config.json` config.
-- Updated: `Text Appender` now uses `input_delimiter` and `output_delimiter` and writes to ComfyUI output when `output_file` is set.
-- Updated: `Prompt Generator (Dictionary)` defaults to `;` as item delimiter and scans `ComfyUI/input/Dictionaries` recursively.
-- Renamed: `arc_lr_scheduler.py` → `ARC_scheduler.py`.
-- Note: `model_save.py` (Save Flux Model v2) exists but is disabled in `__init__.py` in this release.
+v1.5
+- Updated GOD and ODE-EMA samplers, and ARC scheduler to use Comfy registrations so they can be used in default nodes
 
 ## License
 
