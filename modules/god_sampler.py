@@ -4,6 +4,7 @@
 import torch
 import torch.nn.functional as F
 import comfy.samplers  # required to return a KSAMPLER wrapper
+from comfy.k_diffusion import sampling as k_diffusion_sampling
 
 # =========================
 # Helpers: shapes & padding
@@ -209,6 +210,29 @@ def god_flow_sample(model, x, sigmas, extra_args=None, callback=None, disable=No
         x = x_new.to(dtype).detach()
 
     return x
+
+
+# =========================
+# Stock KSampler registration
+# =========================
+
+GOD_SAMPLER_NAME = "god"
+
+def _register_god_sampler():
+    """Register GOD in ComfyUI's live sampler lists without editing core files."""
+    setattr(k_diffusion_sampling, f"sample_{GOD_SAMPLER_NAME}", god_flow_sample)
+
+    # Mutate live lists in place so existing references also see the new entry.
+    for attr in ("SAMPLER_NAMES", "KSAMPLER_NAMES"):
+        names = getattr(comfy.samplers, attr, None)
+        if isinstance(names, list) and GOD_SAMPLER_NAME not in names:
+            names.append(GOD_SAMPLER_NAME)
+
+    samplers = getattr(comfy.samplers.KSampler, "SAMPLERS", None)
+    if isinstance(samplers, list) and GOD_SAMPLER_NAME not in samplers:
+        samplers.append(GOD_SAMPLER_NAME)
+
+_register_god_sampler()
 
 # =========================
 # ComfyUI Node returning a SAMPLER

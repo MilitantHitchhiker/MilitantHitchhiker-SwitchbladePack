@@ -1,196 +1,390 @@
-# auto_cone_dir_ode_opt.py
 from __future__ import annotations
+
+import math
 import torch
 import torch.nn.functional as F
 import comfy.samplers
+from comfy.k_diffusion import sampling as k_diffusion_sampling
 
-# -------------------- cached spatial kernels (module scope) --------------------
-_SOBEL_KX_BASE = torch.tensor([[-1, 0, 1],
-                               [-2, 0, 2],
-                               [-1, 0, 1]], dtype=torch.float32).view(1, 1, 3, 3)
-_SOBEL_KY_BASE = torch.tensor([[-1, -2, -1],
-                               [ 0,  0,  0],
-                               [ 1,  2,  1]], dtype=torch.float32).view(1, 1, 3, 3)
-_LAPLACE_BASE  = torch.tensor([[0, 1, 0],
-                               [1,-4, 1],
-                               [0, 1, 0]], dtype=torch.float32).view(1, 1, 3, 3)
 
-# ---------- small helpers (no per-step kernel allocations) ----------
-def _avg_blur(x: torch.Tensor, k: int = 3) -> torch.Tensor:
-    if x.dim() != 4 or k <= 1:
-        return x
-    pad = k // 2
-    x = F.pad(x, (pad, pad, pad, pad), mode="replicate")
-    return F.avg_pool2d(x, kernel_size=k, stride=1)
+# -----------------------------------------------------------------------------
+# Local anisotropic history for rectified-flow / Anima-style latents
+# -----------------------------------------------------------------------------
 
-def _sobel_mag(x: torch.Tensor) -> torch.Tensor:
+_FLOW_ETA = 1e-3
+_FLOW_EPS_V = 1e-4
+
+
+def _as_5d(x: torch.Tensor):
+    """Return [B,C,T,H,W] plus whether a synthetic T dimension was added."""
+    if x.dim() == 5:
+        return x, False
+    if x.dim() == 4:
+        return x.unsqueeze(2), True
+    raise ValueError(
+        f"ODE EMA Flow expects a 4D or 5D latent, got shape {tuple(x.shape)}"
+    )
+
+
+def _pad_hw(x5: torch.Tensor, pool: int):
+    """Replicate-pad H/W to a multiple of pool."""
+    H, W = x5.shape[-2:]
+    Hp = int(math.ceil(H / pool) * pool)
+    Wp = int(math.ceil(W / pool) * pool)
+    ph = Hp - H
+    pw = Wp - W
+    if ph or pw:
+        # x5 is always 5D [B,C,T,H,W] here. For non-constant padding,
+        # PyTorch's 5D path expects padding for the final three dimensions:
+        # (W_left, W_right, H_top, H_bottom, T_front, T_back).
+        # We only pad H/W and leave T unchanged.
+        x5 = F.pad(x5, (0, pw, 0, ph, 0, 0), mode="replicate")
+    return x5, H, W
+
+
+def _to_blocks(x5: torch.Tensor, pool: int):
     """
-    Depthwise Sobel gradient magnitude.
-    Kernels are cached; compute in fp32 for stability, cast back to input dtype.
+    [B,C,T,H,W] -> [B,Hb,Wb,C,N], N=T*pool*pool.
     """
-    if x.dim() != 4:
-        return torch.zeros_like(x)
-    B, C, H, W = x.shape
-    dev = x.device
+    B, C, T, H, W = x5.shape
+    Hb = H // pool
+    Wb = W // pool
+    blocks = (
+        x5.reshape(B, C, T, Hb, pool, Wb, pool)
+          .permute(0, 3, 5, 1, 2, 4, 6)
+          .reshape(B, Hb, Wb, C, T * pool * pool)
+    )
+    return blocks
 
-    x32 = x.float()
-    kx = _SOBEL_KX_BASE.to(dev).expand(C, 1, 3, 3).contiguous()
-    ky = _SOBEL_KY_BASE.to(dev).expand(C, 1, 3, 3).contiguous()
 
-    gx = F.conv2d(x32, kx, padding=1, groups=C)
-    gy = F.conv2d(x32, ky, padding=1, groups=C)
-    eps = torch.finfo(gx.dtype).eps
-    g32 = torch.sqrt(gx.square() + gy.square() + eps)
-    return g32.to(x.dtype)
+def _from_blocks(blocks: torch.Tensor, T: int, pool: int, H: int, W: int):
+    """
+    [B,Hb,Wb,C,N] -> [B,C,T,H,W], cropping any pad.
+    """
+    B, Hb, Wb, C, N = blocks.shape
+    x5 = (
+        blocks.reshape(B, Hb, Wb, C, T, pool, pool)
+              .permute(0, 3, 4, 1, 5, 2, 6)
+              .reshape(B, C, T, Hb * pool, Wb * pool)
+    )
+    return x5[..., :H, :W]
 
-def _laplace(x: torch.Tensor) -> torch.Tensor:
-    """Depthwise 3x3 Laplacian in fp32, cast back to x dtype."""
-    if x.dim() != 4:
-        return torch.zeros_like(x)
-    C = x.shape[1]
-    dev = x.device
-    x32 = x.float()
-    k = _LAPLACE_BASE.to(dev).expand(C, 1, 3, 3).contiguous()
-    return F.conv2d(x32, k, padding=1, groups=C).to(x.dtype)
 
-def _unit_var(z: torch.Tensor) -> torch.Tensor:
-    v = z.pow(2).mean(dim=(1, 2, 3), keepdim=True).clamp_min(torch.finfo(z.dtype).eps)
-    return z * torch.rsqrt(v)
-
-# ---------- core: ODE in σ-space, with detail options ----------
-def _make_auto_cone_dir_ode_opt(
-    stats_downsample: int = 64,
-    # Detail emphasis (edge-aware gain)
-    detail_gain_max: float = 0.35,          # 0 disables; typical 0.15–0.35
-    detail_power: float = 0.5,              # response to edges; 0.8–1.5 reasonable
-    detail_schedule_power: float = 4.0,     # late-step emphasis; 1–3
+def _local_channel_operator(
+    x: torch.Tensor,
+    x0: torch.Tensor,
+    pool: int,
+    eta: float = _FLOW_ETA,
 ):
     """
-    model(x, sigma) -> x0 (denoised) per k-diff convention.
-    Update (ODE): x_{i+1} = x_i + (σ_{i+1}-σ_i) * d̂_i,  d_i = (x_i - x0)/σ_i.
-    We shape d_i with a smooth SPD cone A (EMA-stabilized), then reweight for detail,
-    renormalize, and optionally apply a bounded shock sharpen near the end.
+    Build a local pooled channel second-moment operator.
 
-    Detail controls:
-      - detail_gain_max: max multiplicative gain on high-frequency directions (0 disables).
-      - detail_power: nonlinearity on the normalized gradient map.
-      - detail_schedule_power: how strongly the gain ramps up as σ→0.
-      - shock_strength / shock_last_steps: late, bounded shock-like sharpening.
-      - heun_corrector_last_steps: late second-order corrector using the same A.
+        d = x - x0
+        S_j = (1/N) sum_{p in block j} d_p d_p^T
+        A_j = S_j / (tr(S_j) + eta^2)
+
+    Each spatial block gets its own [C,C] operator.  T is pooled together with
+    the H/W neighborhood.  The result is [B,Hb,Wb,C,C].
     """
+    d5, _ = _as_5d((x - x0).float())
+    d5, H, W = _pad_hw(d5, pool)
+    db = _to_blocks(d5, pool)
 
-    # sanitize once for closure
-    stats_downsample     = max(1, int(stats_downsample))
-    detail_gain_max      = max(0.0, float(detail_gain_max))
-    detail_power         = max(0.1, float(detail_power))
-    detail_schedule_power= max(0.1, float(detail_schedule_power))
+    N = max(int(db.shape[-1]), 1)
+    S = torch.einsum("bhwcn,bhwdn->bhwcd", db, db) / float(N)
+    tr = torch.diagonal(S, dim1=-2, dim2=-1).sum(dim=-1)[..., None, None]
 
+    A = S / (tr + float(eta) ** 2).clamp_min(torch.finfo(S.dtype).eps)
+    return A, H, W
+
+
+def _update_history(
+    A_inst: torch.Tensor,
+    A_prev: torch.Tensor | None,
+    sigma: torch.Tensor,
+    sigma_prev: torch.Tensor | None,
+    history_length: float,
+):
+    """
+    Exponential relaxation in noise-level distance:
+
+        h = |sigma_n - sigma_{n-1}|
+        beta = exp(-h / ell)
+        A_bar = beta A_prev + (1-beta) A_inst
+    """
+    if A_prev is None or sigma_prev is None:
+        return A_inst
+
+    ell = max(float(history_length), 1e-8)
+    h = (sigma.float() - sigma_prev.float()).abs()
+    beta = torch.exp(-h / ell).view(-1, 1, 1, 1, 1)
+    return beta * A_prev + (1.0 - beta) * A_inst
+
+
+def _orthogonal_local_turn(
+    v: torch.Tensor,
+    A_bar: torch.Tensor,
+    turn_strength: float,
+    pool: int,
+    eps_v: float = _FLOW_EPS_V,
+):
+    """
+    Exact local orthogonal correction:
+
+        K = 2 A_bar - I
+        q = (||v||^2 K v - v(v^T K v)) / (||v||^2 + eps_v^2)
+        v_tilde = v + alpha q
+
+    alpha is exposed directly as turn_strength in [-1, 1].
+    """
+    v5, squeezed_t = _as_5d(v.float())
+    v5p, H, W = _pad_hw(v5, pool)
+    B, C, T, Hp, Wp = v5p.shape
+
+    vb = _to_blocks(v5p, pool)
+
+    Av = torch.einsum("bhwcd,bhwdn->bhwcn", A_bar.float(), vb)
+    Kv = 2.0 * Av - vb
+
+    r = (vb * vb).sum(dim=3, keepdim=True)
+    vKv = (vb * Kv).sum(dim=3, keepdim=True)
+
+    q = (r * Kv - vb * vKv) / (r + float(eps_v) ** 2)
+
+    alpha = max(-1.0, min(1.0, float(turn_strength)))
+    proposal = vb + alpha * q
+
+    out5 = _from_blocks(proposal, T=T, pool=pool, H=H, W=W)
+    out = out5.squeeze(2) if squeezed_t else out5
+
+    tiny = torch.finfo(vb.dtype).eps
+    vnorm = torch.sqrt(r.clamp_min(tiny))
+    qnorm = torch.sqrt((q * q).sum(dim=3, keepdim=True).clamp_min(0.0))
+    rel = qnorm / vnorm
+
+    return out.to(dtype=v.dtype), float(rel.mean().item()), float(rel.max().item())
+
+
+def _make_flow_sampler(
+    turn_strength: float = 0.35,
+    history_length: float = 0.15,
+    pool_size: int = 8,
+):
+    turn_strength = max(-1.0, min(1.0, float(turn_strength)))
+    history_length = max(1e-8, float(history_length))
+    pool_size = max(2, int(pool_size))
 
     @torch.no_grad()
-    def _sampler(model, x, sigmas, extra_args=None, callback=None, disable=None, noise=None, **kwargs):
+    def _sampler(
+        model,
+        x,
+        sigmas,
+        extra_args=None,
+        callback=None,
+        disable=None,
+        noise=None,
+        **kwargs,
+    ):
         extra_args = {} if extra_args is None else extra_args
-        B, C, H, W = x.shape
-        device, dtype = x.device, x.dtype
 
-        # Move entire schedule to x's device/dtype once; ensure descending schedule
+        B = x.shape[0]
+        device = x.device
+        dtype = x.dtype
+
         sig = sigmas.to(device=device, dtype=dtype)
         sig = sig.flip(0) if sig[0] < sig[-1] else sig
         steps = len(sig) - 1
-        sigma0 = sig[0]
-        sigma = sigma0.expand(B)
 
-        # EMA for cone to kill crawling texture
-        A_prev = None
-        CONE_EMA = 0.7
-        A_MIN    = 0.75   # keep anisotropy gentle, SPD & bounded
-        BETA_MAX = 0.45   # max cone strength (small; avoids streaking)
-
-        # clamp effective downsample to spatial size
-        sd_eff = max(1, min(stats_downsample, int(H), int(W)))
+        A_bar = None
+        sigma_prev = None
 
         for i in range(steps):
-            sigma_next = sig[i + 1].expand(B)
+            sigma_scalar = sig[i]
+            sigma_next_scalar = sig[i + 1]
 
-            # 1) predict denoised x0 (do NOT clamp/filter it)
+            sigma = sigma_scalar.expand(B)
+            sigma_next = sigma_next_scalar.expand(B)
+
             x0 = model(x, sigma, **extra_args)
 
-            # 2) base direction in σ-space
-            d = (x - x0) / sigma.view(B, 1, 1, 1)
+            sigma_view = sigma.view((B,) + (1,) * (x.dim() - 1))
+            tiny = torch.finfo(dtype).tiny
+            v = (x - x0) / sigma_view.clamp_min(tiny)
 
-            # 3) build cone A(x0) with shared gradient stats
-            g  = _avg_blur(_sobel_mag(x0), k=3)      # (B,C,H,W)
+            A_inst, _, _ = _local_channel_operator(
+                x=x,
+                x0=x0,
+                pool=pool_size,
+                eta=_FLOW_ETA,
+            )
+            A_bar = _update_history(
+                A_inst=A_inst,
+                A_prev=A_bar,
+                sigma=sigma,
+                sigma_prev=sigma_prev,
+                history_length=history_length,
+            )
 
-            # downsample for robust stats (major cost win on high res)
-            if sd_eff > 1:
-                g_stats = F.avg_pool2d(g, kernel_size=sd_eff, stride=sd_eff)
-            else:
-                g_stats = g
+            v_tilde, mean_rel, max_rel = _orthogonal_local_turn(
+                v=v,
+                A_bar=A_bar,
+                turn_strength=turn_strength,
+                pool=pool_size,
+                eps_v=_FLOW_EPS_V,
+            )
 
-            # robust median & MAD in fp32 for stability
-            flat = g_stats.view(B, -1).float()
-            med_scalar = flat.median(dim=1).values                                   # (B,)
-            mad_scalar = (flat - med_scalar.unsqueeze(1)).abs().median(dim=1).values # (B,)
-
-            med = med_scalar.view(B, 1, 1, 1).to(dtype)
-            scale = (mad_scalar.view(B, 1, 1, 1) * 1.4826).clamp_min(1e-6).to(dtype)
-
-            # normalised gradient magnitude (non-negative)
-            gn_base = (g - med) / scale
-            gn = gn_base.clamp_min(0.0)
-
-            # shared robust HF proxy from same stats
-            s = gn_base.abs().mean(dim=(1, 2, 3), keepdim=True)
-            hf = (s / (1.0 + s)).detach()
-
-            sigma_frac = (sigma / sigma0).clamp(0, 1).view(B, 1, 1, 1)
-            beta = (BETA_MAX * (0.5 * sigma_frac + 0.5 * hf)).to(dtype)
-
-            # SPD cone, bounded; rsqrt for fewer temps
-            A_now = torch.rsqrt(1.0 + beta * gn.square()).clamp(min=A_MIN, max=1.0)
-
-            # EMA smoothing over steps
-            A_smooth = A_now if A_prev is None else (CONE_EMA * A_now + (1.0 - CONE_EMA) * A_prev)
-            A_prev = A_smooth
-
-            # 4) detail emphasis (edge-aware gain), ramps up as σ→0
-            if detail_gain_max > 0.0:
-                progress = (1.0 - sigma_frac)  # 0 at start, 1 near end
-                gamma = (detail_gain_max * (progress ** detail_schedule_power)).to(dtype)
-                W_detail = 1.0 + gamma * (gn.clamp_min(0.0) ** detail_power)
-            else:
-                W_detail = 1.0
-
-            d_shaped = A_smooth * d
-            d_mod = _unit_var(W_detail * d_shaped)
-
-            # Step size
-            h = (sigma_next - sigma).view(B, 1, 1, 1)
-            x_next = x + h * d_mod
-            x, sigma = x_next, sigma_next
+            if i == 0 or i == steps // 2 or i == steps - 1:
+                print(
+                    "[ODE EMA Flow] "
+                    f"step={i}/{steps} alpha={turn_strength:.3f} "
+                    f"pool={pool_size} q/v mean={mean_rel:.5f} max={max_rel:.5f}"
+                )
 
             if callback is not None:
                 callback({
-                    'x': x, 'i': i,
-                    'sigma': sigma, 'sigma_hat': sigma,
-                    'denoised': x0,
+                    "x": x,
+                    "i": i,
+                    "sigma": sigma_scalar,
+                    "sigma_hat": sigma_scalar,
+                    "denoised": x0,
                 })
+
+            h = (sigma_next - sigma).view((B,) + (1,) * (x.dim() - 1))
+            x = x + h * v_tilde
+
+            sigma_prev = sigma.detach()
 
         return x
 
     return _sampler
 
-# ---------- Comfy nodes (UI-exposed knobs) ----------
+
+class _FlowSamplerWrapper(comfy.samplers.Sampler):
+    """
+    Rebuild the `simple` schedule before KSAMPLER performs flow noise scaling,
+    then run the custom rectified-flow field.
+    """
+    def __init__(self, sampler_fn):
+        self.inner = comfy.samplers.KSAMPLER(sampler_fn)
+
+    def sample(
+        self,
+        model_wrap,
+        sigmas,
+        extra_args,
+        callback,
+        noise,
+        latent_image=None,
+        denoise_mask=None,
+        disable_pbar=False,
+    ):
+        steps = max(int(len(sigmas) - 1), 1)
+        model_sampling = model_wrap.inner_model.model_sampling
+        flow_sigmas = comfy.samplers.calculate_sigmas(
+            model_sampling, "simple", steps
+        ).cpu()
+
+        return self.inner.sample(
+            model_wrap,
+            flow_sigmas,
+            extra_args,
+            callback,
+            noise,
+            latent_image=latent_image,
+            denoise_mask=denoise_mask,
+            disable_pbar=disable_pbar,
+        )
+
+
+
+# -----------------------------------------------------------------------------
+# Stock KSampler registration
+# -----------------------------------------------------------------------------
+
+ODE_EMA_SAMPLER_NAME = "ode_ema_flow"
+
+ODE_EMA_FIXED_TURN_STRENGTH = 0.35
+ODE_EMA_FIXED_HISTORY_LENGTH = 0.15
+ODE_EMA_FIXED_POOL_SIZE = 8
+
+
+@torch.no_grad()
+def sample_ode_ema_flow(
+    model,
+    x,
+    sigmas,
+    extra_args=None,
+    callback=None,
+    disable=None,
+    **kwargs,
+):
+    """
+    Fixed-parameter stock-KSampler entry.
+
+    Canonical settings:
+        turn_strength = 0.35
+        history_length = 0.15
+        pool_size = 8
+
+    For Anima / flow models, use scheduler="simple".
+    """
+    sampler_fn = _make_flow_sampler(
+        turn_strength=ODE_EMA_FIXED_TURN_STRENGTH,
+        history_length=ODE_EMA_FIXED_HISTORY_LENGTH,
+        pool_size=ODE_EMA_FIXED_POOL_SIZE,
+    )
+    return sampler_fn(
+        model,
+        x,
+        sigmas,
+        extra_args=extra_args,
+        callback=callback,
+        disable=disable,
+        **kwargs,
+    )
+
+
+def _register_ode_ema_sampler():
+    """
+    Register ODE EMA Flow in ComfyUI's live sampler lists without editing core
+    files. The existing tunable custom SAMPLER node remains available.
+    """
+    setattr(
+        k_diffusion_sampling,
+        f"sample_{ODE_EMA_SAMPLER_NAME}",
+        sample_ode_ema_flow,
+    )
+
+    # Mutate live lists in place so existing references see the new entry.
+    for attr in ("SAMPLER_NAMES", "KSAMPLER_NAMES"):
+        names = getattr(comfy.samplers, attr, None)
+        if isinstance(names, list) and ODE_EMA_SAMPLER_NAME not in names:
+            names.append(ODE_EMA_SAMPLER_NAME)
+
+    samplers = getattr(comfy.samplers.KSampler, "SAMPLERS", None)
+    if isinstance(samplers, list) and ODE_EMA_SAMPLER_NAME not in samplers:
+        samplers.append(ODE_EMA_SAMPLER_NAME)
+
+
+_register_ode_ema_sampler()
+
 class ODE_EMA:
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                # Existing controls
-                "stats_downsample": ("INT", {"default": 64, "min": 1, "max": 64, "step": 1}),
-                # Detail emphasis
-                "detail_gain_max": ("FLOAT", {"default": 0.35, "min": 0.0, "max": 0.5, "step": 0.01}),
-                "detail_power": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 0.5, "step": 0.01}),
-                "detail_schedule_power": ("FLOAT", {"default": 4.0, "min": 2.0, "max": 4.0, "step": 0.5}),
+                "turn_strength": (
+                    "FLOAT",
+                    {"default": 0.35, "min": -1.0, "max": 1.0, "step": 0.01},
+                ),
+                "history_length": (
+                    "FLOAT",
+                    {"default": 0.15, "min": 0.001, "max": 2.0, "step": 0.01},
+                ),
+                "pool_size": (
+                    "INT",
+                    {"default": 8, "min": 2, "max": 64, "step": 2},
+                ),
             }
         }
 
@@ -199,22 +393,24 @@ class ODE_EMA:
     FUNCTION = "build"
     CATEGORY = "MilitantAI/Switchblade/Generation"
 
-    def build(self,
-              stats_downsample: int,
-              detail_gain_max: float,
-              detail_power: float,
-              detail_schedule_power: float):
-        sampler_fn = _make_auto_cone_dir_ode_opt(
-            stats_downsample=stats_downsample,
-            detail_gain_max=detail_gain_max,
-            detail_power=detail_power,
-            detail_schedule_power=detail_schedule_power,
+    def build(
+        self,
+        turn_strength: float,
+        history_length: float,
+        pool_size: int,
+    ):
+        sampler_fn = _make_flow_sampler(
+            turn_strength=turn_strength,
+            history_length=history_length,
+            pool_size=pool_size,
         )
-        return (comfy.samplers.KSAMPLER(sampler_fn),)
+        return (_FlowSamplerWrapper(sampler_fn),)
+
 
 NODE_CLASS_MAPPINGS = {
     "ODE-EMA Sampler": ODE_EMA,
 }
+
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "ODE-EMA Sampler": "ODE EMA Sampler",
+    "ODE-EMA Sampler": "ODE EMA Flow Sampler",
 }

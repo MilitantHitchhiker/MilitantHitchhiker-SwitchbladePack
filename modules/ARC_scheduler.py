@@ -1,5 +1,6 @@
 import math
 import torch
+import comfy.samplers
 
 
 class ARC_Scheduler:
@@ -112,6 +113,56 @@ class ARC_Scheduler:
 
         return (adjusted_sigmas,)
 
+
+
+# =========================
+# Stock KSampler scheduler registration
+# =========================
+
+ARC_SCHEDULER_NAME = "arc"
+
+def arc_scheduler(model_sampling, steps: int) -> torch.Tensor:
+    """
+    Stock-KSampler adapter for ARC.
+
+    Contract:
+      - takes (model_sampling, steps)
+      - returns 1-D sigmas of length steps + 1
+      - final sigma is exactly 0
+
+    Stock KSampler already handles denoise by requesting a longer schedule
+    and slicing it, so this adapter always builds the full ARC path.
+    """
+    steps = max(1, int(steps))
+
+    base_sigmas = ARC_Scheduler._baseline_sigmas(
+        model_sampling,
+        steps,
+        1.0,
+    )
+    adjusted_sigmas = ARC_Scheduler._compute_arc_warp(base_sigmas)
+
+    return torch.cat(
+        [adjusted_sigmas, adjusted_sigmas.new_zeros([1])],
+        dim=0,
+    )
+
+
+def _register_arc_scheduler():
+    """Register ARC in ComfyUI's live scheduler tables/lists without core edits."""
+    comfy.samplers.SCHEDULER_HANDLERS[ARC_SCHEDULER_NAME] = (
+        comfy.samplers.SchedulerHandler(arc_scheduler, use_ms=True)
+    )
+
+    names = getattr(comfy.samplers, "SCHEDULER_NAMES", None)
+    if isinstance(names, list) and ARC_SCHEDULER_NAME not in names:
+        names.append(ARC_SCHEDULER_NAME)
+
+    schedulers = getattr(comfy.samplers.KSampler, "SCHEDULERS", None)
+    if isinstance(schedulers, list) and ARC_SCHEDULER_NAME not in schedulers:
+        schedulers.append(ARC_SCHEDULER_NAME)
+
+_register_arc_scheduler()
 
 # Register the node into ComfyUI's NODE_CLASS_MAPPINGS
 NODE_CLASS_MAPPINGS = {
